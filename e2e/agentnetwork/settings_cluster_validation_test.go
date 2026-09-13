@@ -19,18 +19,17 @@ import (
 // on the picked cluster, end to end against a real proxy.
 //
 // The synthesised gateway service is always private: agents reach it over the
-// WireGuard tunnel and are authorised by their peer identity. Only a proxy
-// running embedded in a netbird client (`netbird proxy --private`) can serve
-// that, and management reports it per cluster as the `private` capability —
-// the same supports_private flag the dashboard reads to decide which clusters
-// it may offer. The endpoint assigned at bootstrap is immutable, so pinning
+// WireGuard tunnel and are authorised by their peer identity. Only a cluster
+// with private capabilities can serve that, and management reports it per
+// cluster as the `private` capability — the same supports_private flag the
+// dashboard reads to decide which clusters it may offer. The endpoint assigned at bootstrap is immutable, so pinning
 // to a cluster that cannot serve it has to be refused up front rather than
 // leaving the account with a dead gateway.
 //
 // One combined server and one cluster address, walked through three states:
 // a live centralised proxy (refused), that proxy stopped so nothing in the
 // cluster is live any more (still refused — the record of what the cluster is
-// outlives its heartbeats), and finally an embedded proxy (accepted, the
+// outlives its heartbeats), and finally a private-capable proxy (accepted, the
 // capability being any-true across the cluster's live proxies). Same account,
 // same address, so nothing but the cluster's state accounts for the different
 // answers.
@@ -45,8 +44,8 @@ func TestSettingsBootstrapValidatesProxyCluster(t *testing.T) {
 
 	const cluster = harness.AgentNetworkCluster
 
-	// A centralised proxy: connected and serving the cluster, but not
-	// embedded in a netbird client, so it cannot authenticate tunnel peers.
+	// A centralised proxy: connected and serving the cluster, but without
+	// private capabilities, so it cannot serve a private service.
 	central, err := harness.StartProxy(ctx, fresh, proxyToken, map[string]string{
 		"NB_PROXY_PRIVATE": "false",
 	})
@@ -59,9 +58,9 @@ func TestSettingsBootstrapValidatesProxyCluster(t *testing.T) {
 	_, err = fresh.CreateSettings(ctx, api.AgentNetworkSettingsCreateRequest{
 		ProxyAddress: ptr(cluster),
 	})
-	require.Error(t, err, "bootstrap onto a cluster with no embedded proxy must be refused")
+	require.Error(t, err, "bootstrap onto a cluster without private capabilities must be refused")
 	requireClientError(t, err)
-	assert.Contains(t, err.Error(), "embedded proxy",
+	assert.Contains(t, err.Error(), "private capabilities",
 		"the refusal must name what the cluster is missing: %v", err)
 
 	after, err := fresh.GetSettings(ctx)
@@ -81,14 +80,14 @@ func TestSettingsBootstrapValidatesProxyCluster(t *testing.T) {
 	_, err = fresh.CreateSettings(ctx, api.AgentNetworkSettingsCreateRequest{
 		ProxyAddress: ptr(cluster),
 	})
-	require.Error(t, err, "an offline cluster with no embedded proxy on record must stay refused")
+	require.Error(t, err, "an offline cluster without private capabilities on record must stay refused")
 	requireClientError(t, err)
 
-	// Add an embedded proxy to the same cluster: now it can serve a private
+	// Add a private-capable proxy to the same cluster: now it can serve a private
 	// service, and the very same request must go through.
-	embedded, err := harness.StartProxy(ctx, fresh, proxyToken)
-	require.NoError(t, err, "start embedded proxy")
-	t.Cleanup(func() { _ = embedded.Terminate(context.Background()) })
+	privateProxy, err := harness.StartProxy(ctx, fresh, proxyToken)
+	require.NoError(t, err, "start private-capable proxy")
+	t.Cleanup(func() { _ = privateProxy.Terminate(context.Background()) })
 
 	waitClusterPrivate(ctx, t, fresh, cluster, true)
 

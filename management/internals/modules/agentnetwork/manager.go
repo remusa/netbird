@@ -1074,17 +1074,15 @@ func (m *managerImpl) bootstrapSelfAddressed(ctx context.Context, settings *type
 // The synthesised gateway service is unconditionally private
 // (buildAccountService): agents reach it over the WireGuard tunnel and are
 // authorised by ValidateTunnelPeer against the policies' source groups, and
-// its single target is the cluster itself with DirectUpstream. Only a proxy
-// running embedded in a netbird client (`netbird proxy`) can serve that — a
-// centralised proxy has no tunnel identity to authenticate against and no
-// WireGuard endpoint to be reached on. Management reports that per cluster as
-// the `private` capability, the same flag the dashboard renders as
+// its single target is the cluster itself with DirectUpstream. Only a cluster
+// with private capabilities can serve that. Management reports it per cluster
+// as the `private` capability, the same flag the dashboard renders as
 // supports_private when it gates NetBird-only services.
 //
 // Without this check the bootstrap happily pins to any cluster the caller
-// names, including one with no embedded proxy — and the endpoint it allocates
-// is immutable, so the account is left with a dead gateway that only a
-// DeleteSettings/re-bootstrap can undo.
+// names, including one without private capabilities — and the endpoint it
+// allocates is immutable, so the account is left with a dead gateway that only
+// a DeleteSettings/re-bootstrap can undo.
 //
 // Whether management knows the cluster is decided on the proxy rows
 // themselves, never on how fresh their heartbeats are: a cluster's rows
@@ -1107,7 +1105,7 @@ func (m *managerImpl) validateGatewayCluster(ctx context.Context, accountID, clu
 	}
 
 	// A cluster management knows has to prove it can serve the gateway, and
-	// only a live embedded proxy proves that. Both an explicit false and an
+	// only a live proxy reporting the capability proves that. Both an explicit false and an
 	// unreported capability (nothing live in the cluster, or proxies predating
 	// capability reporting) fail here: unusable and unproven are the same
 	// answer for a decision that cannot be revisited later.
@@ -1123,8 +1121,8 @@ func (m *managerImpl) validateGatewayCluster(ctx context.Context, accountID, clu
 	}
 
 	return status.Errorf(status.InvalidArgument,
-		"proxy cluster %s cannot serve the agent network gateway: the gateway is reachable only from connected peers, "+
-			"which needs at least one connected embedded proxy (netbird proxy) in the cluster", clusterAddr)
+		"proxy cluster %s has no private capabilities: the agent network gateway requires a reverse proxy cluster "+
+			"with private capabilities", clusterAddr)
 }
 
 // accountClusterSpellings returns every proxy cluster address in the account's

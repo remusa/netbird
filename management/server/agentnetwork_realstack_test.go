@@ -93,7 +93,7 @@ func TestAgentNetwork_ProviderCRUD_FansOutToProxyAndClientPeers(t *testing.T) {
 	// UpdateAccountPeers, which is the path under test.
 	agentMgr := agentnetwork.NewManager(am.Store, permissions.NewManager(am.Store), am, nil)
 
-	seedEmbeddedProxyCluster(t, am.Store, clusterAddr)
+	seedPrivateProxyCluster(t, am.Store, clusterAddr)
 	_, err = agentMgr.CreateSettings(ctx, adminUserID, agenttypes.DefaultSettings(accountID), clusterAddr, "")
 	require.NoError(t, err, "CreateSettings must bootstrap the endpoint")
 	// The bootstrap itself reconciles and queues updates on both channels;
@@ -225,11 +225,11 @@ func synthZoneRData(sync *nbproto.SyncResponse, clusterAddr, fqdn string) string
 	return ""
 }
 
-// seedEmbeddedProxyCluster registers a connected proxy running embedded in a
+// seedPrivateProxyCluster registers a connected proxy with private capabilities in a
 // netbird client for clusterAddr, matching what a real deployment looks like
 // when the account bootstraps: the agent-network gateway service is always
 // private, so its cluster has to be one that can serve private services.
-func seedEmbeddedProxyCluster(t *testing.T, st store.Store, clusterAddr string) {
+func seedPrivateProxyCluster(t *testing.T, st store.Store, clusterAddr string) {
 	t.Helper()
 	private := true
 	now := time.Now().UTC()

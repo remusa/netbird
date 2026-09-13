@@ -32,7 +32,7 @@ const (
 	testAccountID = "acc-1"
 	testUserID    = "user-bob"
 	// testClusterAddress is the shared proxy cluster the settings tests pin
-	// their gateway to; the fixture seeds a connected embedded proxy for it.
+	// their gateway to; the fixture seeds a connected private-capable proxy for it.
 	testClusterAddress = "eu.proxy.netbird.io"
 )
 
@@ -84,7 +84,7 @@ func newAgentNetworkHandlerFixture(t *testing.T) *agentNetworkHandlerFixture {
 	// clusters, so seed the shared cluster these tests pin to as a real,
 	// private-capable one — the wire-shape assertions then run through the
 	// validated path rather than the "nothing connected yet" carve-out.
-	seedSharedEmbeddedCluster(t, st, testClusterAddress)
+	seedSharedPrivateCluster(t, st, testClusterAddress)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/agent-network/providers", h.createProvider).Methods("POST")
@@ -280,10 +280,10 @@ func TestConsumptionHandler_PopulatedAccountListsRows(t *testing.T) {
 		"rows recorded in the same window must share the aligned window_start_utc")
 }
 
-// seedSharedEmbeddedCluster registers a connected, NetBird-operated proxy
-// running embedded in a netbird client (the `private` capability) so
+// seedSharedPrivateCluster registers a connected, NetBird-operated proxy
+// with private capabilities (the `private` capability) so
 // clusterAddr is a cluster any account may pin its agent-network gateway to.
-func seedSharedEmbeddedCluster(t *testing.T, st store.Store, clusterAddr string) {
+func seedSharedPrivateCluster(t *testing.T, st store.Store, clusterAddr string) {
 	t.Helper()
 	private := true
 	now := time.Now().UTC()
