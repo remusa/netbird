@@ -1,0 +1,84 @@
+name: ui-linux-arm64
+# Experimental native linux/arm64 UI build (upstream only ships linux/amd64).
+# Mirrors the release_ui job's Linux steps, minus goreleaser/signing/publish.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag/branch to build'
+        default: 'v0.78.1'
+      goarch:
+        description: 'GOARCH (keep arm64)'
+        default: 'arm64'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-arm64-ui-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-arm64-ui-
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y -q libgtk-4-dev libwebkitgtk-6.0-dev libsoup-3.0-dev
+
+      - name: Install wails3 CLI (pinned to go.mod)
+        run: |
+          WAILS_VERSION=$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)
+          echo "wails3 $WAILS_VERSION"
+          go install github.com/wailsapp/wails/v3/cmd/wails3@$WAILS_VERSION
+
+      - name: Generate bindings + build frontend
+        run: |
+          cd client/ui && wails3 generate bindings -clean=true -ts
+          cd frontend && pnpm install --frozen-lockfile && pnpm build
+
+      - name: Build netbird-ui (linux/arm64, production tags)
+        env:
+          CGO_ENABLED: 1
+          GOOS: linux
+          GOARCH: ${{ inputs.goarch }}
+        run: |
+          cd client/ui
+          VERSION="${{ inputs.ref }}"
+          VERSION="${VERSION#v}"
+          go build -tags production \
+            -ldflags "-s -w -X github.com/netbirdio/netbird/version.version=${VERSION}" \
+            -o netbird-ui-linux-arm64 .
+          file netbird-ui-linux-arm64
+          ./netbird-ui-linux-arm64 --help 2>&1 | head -20 || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netbird-ui-linux-arm64
+          path: client/ui/netbird-ui-linux-arm64
+          retention-days: 14
